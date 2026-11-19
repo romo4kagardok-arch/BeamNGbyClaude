@@ -35,6 +35,13 @@ export class Hud {
     this.msg = el('div', 'hud-msg', this.root);
     this.hint = el('div', 'hud-hint', this.root, 'F1 — управление · Esc — пауза · R — ремонт · C — камера');
     this.fpsEl = el('div', 'hud-fps hidden', this.root);
+    this.buttons = el('div', 'hud-buttons', this.root);
+    this.onButton = null;
+    for (const [id, label, title] of [['repair', '🔧 Ремонт', 'R — починить и поставить на колёса'], ['reset', '↺ На старт', 'T — вернуть на старт'], ['camera', '🎥 Камера', 'C — сменить камеру'], ['pause', '☰ Меню', 'Esc — пауза']]) {
+      const b = el('button', 'hud-btn', this.buttons, label);
+      b.title = title;
+      b.addEventListener('click', (e) => { e.stopPropagation(); if (this.onButton) this.onButton(id); b.blur(); });
+    }
     this.msgTimer = 0;
     this.showFps = false;
     this.frames = 0;

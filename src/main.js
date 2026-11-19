@@ -100,6 +100,15 @@ class Game {
     this.hud = new Hud(document.getElementById('ui'), this.mapImage, MAP_SIZE);
     this.hud.showFps = this.settings.showFps;
     this.menu = new Menu(document.getElementById('ui'), this);
+    this.hud.onButton = (id) => {
+      this.audio.init();
+      if (this.state !== 'play') return;
+      if (id === 'pause') { if (!this.paused) this.menu.openPause(); return; }
+      if (this.paused || !this.player) return;
+      if (id === 'repair') { this.player.repair(); this.hud.message('Автомобиль восстановлен', 1.2); }
+      if (id === 'reset') { this.mode && this.mode.respawn(); this.cam.snap(this.player); }
+      if (id === 'camera') { const m = this.cam.mode === 'free' ? (this.cam.setMode('chase'), 'chase') : this.cam.next(); this.hud.message('Камера: ' + CAM_NAMES[m], 1); }
+    };
     this.editor = new Editor(this);
     this.setLoading('Синтез звуков двигателей…', 0.8);
     await nextFrame();
@@ -715,7 +724,7 @@ class Game {
         loose = Math.max(loose, 1);
         const col = DUST_COLORS[[0, 0, 2, 3, 0, 0, 4, 0, 0, 5][w.surface] || 1] || DUST_COLORS[1];
         const amt = clamp(speed / 25 + slip / 8, 0, 1.2) * (w.surface === SURF.GRASS ? 0.45 : 1);
-        pf.dust(cp[0], cp[1], cp[2], b.comVel[0], b.comVel[2], amt * rate * 0.6, col);
+        pf.dust(cp[0], cp[1], cp[2], b.comVel[0], b.comVel[2], amt * rate * 0.3, col);
         if (slip > 1.5 || speed > 3) this.skidmarks.add(key, cp, side, w.width * 0.45, clamp(0.08 + slip * 0.04, 0, 0.35), w.surface === SURF.SNOW ? [0.75, 0.78, 0.82] : [0.18, 0.13, 0.08]);
         else this.skidmarks.add(key, cp, side, 0, 0, null);
       }

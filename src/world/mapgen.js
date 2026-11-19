@@ -441,7 +441,7 @@ export function generateMap(seed = 7) {
     return { x: p[0] - Math.cos(yaw) * off, z: p[1] + Math.sin(yaw) * off, yaw };
   };
   const spawns = {
-    city: { name: 'Новоград, центр', ...roadSpawn(roads.find((r) => r.kind === 'street'), 40) },
+    city: { name: 'Новоград, центр', ...roadSpawn(roads.filter((r) => r.kind === 'street')[Math.floor(streetXs.length / 2)], 34) },
     highway: { name: 'Кольцевая трасса', ...roadSpawn(ring, 30) },
     track: { name: 'Кольцо Ветров, старт', ...roadSpawn(track, 0) },
     proving: { name: 'Полигон для краш-тестов', x: -380, z: -80, yaw: Math.PI },

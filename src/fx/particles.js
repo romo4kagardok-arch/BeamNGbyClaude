@@ -142,7 +142,7 @@ export class Particles {
   dust(x, y, z, vx, vz, amount, col) {
     if (Math.random() > amount * this.quality) return;
     const c = col || DUST_COLORS[1];
-    this.smoke.emit(x, y + 0.1, z, vx * 0.15 + (Math.random() - 0.5) * 1.5, 0.4 + Math.random(), vz * 0.15 + (Math.random() - 0.5) * 1.5, 1.6 + Math.random() * 1.6, 0.6, 2.0, c[0], c[1], c[2], 0.42, 0.05, 1.0);
+    this.smoke.emit(x, y + 0.1, z, vx * 0.15 + (Math.random() - 0.5) * 1.5, 0.4 + Math.random(), vz * 0.15 + (Math.random() - 0.5) * 1.5, 1.4 + Math.random() * 1.4, 0.5, 1.8, c[0], c[1], c[2], 0.3, 0.05, 1.0);
   }
   sparks(x, y, z, vx, vy, vz, n) {
     for (let i = 0; i < n * this.quality; i++) {

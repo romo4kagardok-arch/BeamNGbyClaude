@@ -298,6 +298,12 @@ export function buildCarParts(def, shape, opts = {}) {
         if (isSide && dr) part = 'door' + dr.i + (side > 0 ? 'L' : 'R');
         if (hatch && zc < (P.hatchHinge ?? -99)) part = 'trunk';
         if (style === 'bus' && isSide && side < 0 && ((zc > 3.6 && zc < 4.75) || (zc > -0.55 && zc < 0.55))) mat = 'glass';
+        // separate breakable panels: windshield, rear window and every side window between pillars
+        if (mat === 'glass' && part === 'body') {
+          if (!isSide && inRange(zc, glass.ws)) mat = 'glassWS';
+          else if (!isSide && inRange(zc, glass.rw)) mat = 'glassRW';
+          else if (isSide) mat = 'glass' + (side > 0 ? 'L' : 'R') + (glass.pillars || []).filter((pz) => pz < zc).length;
+        }
         B.gquad(part, mat, cg(i, j), cg(i, j + 1), cg(i + 1, j + 1), cg(i + 1, j));
       }
     }

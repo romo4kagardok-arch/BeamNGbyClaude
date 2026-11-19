@@ -250,9 +250,11 @@ export class VehicleVisual {
     let matName = bk.mat;
     const side = bk.part.endsWith('L') ? 'L' : 'R';
     if (bk.mat === 'head' || bk.mat === 'tail' || bk.mat === 'rev' || bk.mat === 'ind') matName = bk.mat + side;
+    const isGlass = bk.mat.startsWith('glass');
+    if (isGlass) matName = 'glass';
     const mat = this.mats[matName] || this.mats.paint;
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.castShadow = bk.mat !== 'glass' && bk.mat !== 'under';
+    mesh.castShadow = !isGlass && bk.mat !== 'under';
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     let part = this.parts.get(bk.part);
@@ -266,7 +268,7 @@ export class VehicleVisual {
     group_add(part, mesh);
     const entry = { mesh, rest: pos, skinI, skinW, isPaint, part, mat: bk.mat, n };
     part.meshes.push(entry);
-    if (bk.mat === 'glass') this.panels.push({ kind: 'glass', entry, part, broken: false, cracked: false, windshield: false });
+    if (isGlass) this.panels.push({ kind: 'glass', entry, part, broken: false, cracked: false, windshield: bk.mat === 'glassWS' || bk.mat === 'glassRW' });
     if (bk.mat === 'head' || bk.mat === 'tail') this.panels.push({ kind: 'light', entry, part, broken: false, matName });
   }
 
@@ -456,7 +458,7 @@ export class VehicleVisual {
       const thr = pn.kind === 'glass' ? (pn.cracked ? 0.075 : 0.045) : 0.028;
       if (dmg > thr) {
         if (pn.kind === 'glass') {
-          const ws = pn.part.name === 'body' && !pn.cracked && dmg < thr * 1.6;
+          const ws = pn.windshield && !pn.cracked && dmg < thr * 1.6;
           if (ws) {
             pn.cracked = true;
             pn.entry.mesh.material = this.mats.glassCracked;

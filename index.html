@@ -134,6 +134,10 @@ button { font: inherit; }
 .hud-msg.ok, .ok { color: var(--ok); }
 .hud-hint { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-size: 12px; color: rgba(255,255,255,0.45); text-shadow: 0 1px 2px #000; }
 .hud-fps { position: absolute; left: 16px; top: 34px; font-size: 12px; color: #8fd; font-family: monospace; }
+.hud .hud-buttons { position: absolute; right: 236px; top: 18px; display: flex; gap: 6px; pointer-events: auto; }
+.hud-btn { background: rgba(8,10,14,0.7); color: #e8edf3; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.hud-btn:hover { background: rgba(255, 90, 31, 0.8); }
+.hud-status { background: rgba(8,10,14,0.45); padding: 3px 8px; border-radius: 5px; }
 
 /* sandbox + editor panels */
 .sandbox-panel, .editor-panel { position: fixed; left: 12px; top: 54px; width: 270px; max-height: calc(100vh - 300px); overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; z-index: 20; font-size: 13px; }

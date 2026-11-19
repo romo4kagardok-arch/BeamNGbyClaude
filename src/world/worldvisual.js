@@ -46,7 +46,8 @@ export class WorldVisual {
     const chunks = 8;
     const cells = (res - 1) / chunks;
     const noise = makeNoise2D(3);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: this.tx.detail, roughness: 0.96, metalness: 0 });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: this.tx.detail, roughness: 0.96, metalness: 0, color: '#ffffff' });
+    mat.color.setScalar(1.25);
     this.terrainMat = mat;
     const tmp = new Float64Array(4);
     for (let cz = 0; cz < chunks; cz++) for (let cx = 0; cx < chunks; cx++) {
@@ -77,7 +78,8 @@ export class WorldVisual {
           const f = clamp((slope - 0.12) * 4, 0, 0.8);
           r = r * (1 - f) + 0.42 * f; g = g * (1 - f) + 0.39 * f; b = b * (1 - f) + 0.35 * f;
         }
-        col[k * 3] = r; col[k * 3 + 1] = g; col[k * 3 + 2] = b;
+        // authored in sRGB-ish space; vertex colors are linear
+        col[k * 3] = Math.pow(Math.max(0, r), 1.7); col[k * 3 + 1] = Math.pow(Math.max(0, g), 1.7); col[k * 3 + 2] = Math.pow(Math.max(0, b), 1.7);
       }
       const idx = [];
       for (let j = 0; j < cells; j++) for (let i = 0; i < cells; i++) {
@@ -260,7 +262,7 @@ export class WorldVisual {
     const color = (g, c) => {
       const n = g.attributes.position.count;
       const col = new Float32Array(n * 3);
-      const cc = new THREE.Color(c);
+      const cc = new THREE.Color(c); // Color() converts hex (sRGB) to linear
       for (let i = 0; i < n; i++) { col[i * 3] = cc.r; col[i * 3 + 1] = cc.g; col[i * 3 + 2] = cc.b; }
       g.setAttribute('color', new THREE.BufferAttribute(col, 3));
       return g.index ? g.toNonIndexed() : g;
@@ -280,7 +282,7 @@ export class WorldVisual {
     leafy.push(color(t2, '#54402c'));
     const R = rng(4);
     for (let k = 0; k < 4; k++) {
-      const s = new THREE.IcosahedronGeometry(1.3 + R() * 0.5, 1);
+      const s = new THREE.IcosahedronGeometry(1.3 + R() * 0.5, 0);
       s.translate((R() - 0.5) * 1.6, 3.6 + R() * 1.4, (R() - 0.5) * 1.6);
       leafy.push(color(s, k % 2 ? '#3b6b2a' : '#4a7a32'));
     }
@@ -293,49 +295,54 @@ export class WorldVisual {
     this.treeGeos = geos;
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
     this.treeMat = mat;
-    const counts = [0, 0];
-    for (const t of trees) counts[t.type]++;
-    this.treeMeshes = geos.map((g, i) => {
-      const m = new THREE.InstancedMesh(g, mat, Math.max(1, counts[i]));
+    // spatial chunks so the camera and the shadow camera can cull most trees
+    const CH = 6, size = this.map.T.size, cs = size / CH;
+    const buckets = new Map();
+    trees.forEach((t, i) => {
+      const cx = Math.min(CH - 1, Math.max(0, Math.floor((t.x + size / 2) / cs)));
+      const cz = Math.min(CH - 1, Math.max(0, Math.floor((t.z + size / 2) / cs)));
+      const key = t.type * 1000 + cz * CH + cx;
+      (buckets.get(key) || buckets.set(key, []).get(key)).push(i);
+    });
+    this.treeMeshes = [];
+    this.treeIndex = new Array(trees.length);
+    const M = new THREE.Matrix4();
+    for (const [key, list] of buckets) {
+      const type = Math.floor(key / 1000);
+      const m = new THREE.InstancedMesh(geos[type], mat, list.length);
       m.castShadow = true;
       m.receiveShadow = true;
+      const mi = this.treeMeshes.length;
+      list.forEach((ti, k) => {
+        this.treeMatrix(trees[ti], ti, M);
+        m.setMatrixAt(k, M);
+        this.treeIndex[ti] = [mi, k];
+      });
+      m.instanceMatrix.needsUpdate = true;
+      m.computeBoundingSphere();
       this.group.add(m);
-      return m;
-    });
-    this.treeIndex = [];
-    const c = [0, 0];
-    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
-    for (let i = 0; i < trees.length; i++) {
-      const t = trees[i];
-      const k = c[t.type]++;
-      Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot);
-      S.set(t.s, t.s * (0.9 + (i % 7) * 0.05), t.s);
-      P.set(t.x, t.y - 0.1, t.z);
-      M.compose(P, Q, S);
-      this.treeMeshes[t.type].setMatrixAt(k, M);
-      this.treeIndex.push([t.type, k]);
+      this.treeMeshes.push(m);
     }
-    for (const m of this.treeMeshes) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); }
+  }
+
+  treeMatrix(t, i, M) {
+    const Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot);
+    const S = new THREE.Vector3(t.s, t.s * (0.9 + (i % 7) * 0.05), t.s);
+    return M.compose(new THREE.Vector3(t.x, t.y - 0.1, t.z), Q, S);
   }
 
   hideTree(i) {
-    const [type, k] = this.treeIndex[i];
-    const M = new THREE.Matrix4().makeScale(0, 0, 0);
-    this.treeMeshes[type].setMatrixAt(k, M);
-    this.treeMeshes[type].instanceMatrix.needsUpdate = true;
+    const [mi, k] = this.treeIndex[i];
+    this.treeMeshes[mi].setMatrixAt(k, new THREE.Matrix4().makeScale(0, 0, 0));
+    this.treeMeshes[mi].instanceMatrix.needsUpdate = true;
   }
 
   showAllTrees() {
     const trees = this.map.trees;
-    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
+    const M = new THREE.Matrix4();
     for (let i = 0; i < trees.length; i++) {
-      const t = trees[i];
-      const [type, k] = this.treeIndex[i];
-      Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot);
-      S.set(t.s, t.s * (0.9 + (i % 7) * 0.05), t.s);
-      P.set(t.x, t.y - 0.1, t.z);
-      M.compose(P, Q, S);
-      this.treeMeshes[type].setMatrixAt(k, M);
+      const [mi, k] = this.treeIndex[i];
+      this.treeMeshes[mi].setMatrixAt(k, this.treeMatrix(trees[i], i, M));
     }
     for (const m of this.treeMeshes) m.instanceMatrix.needsUpdate = true;
   }

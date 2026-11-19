@@ -344,6 +344,18 @@ export class AudioEngine {
     if (!spatial) {
       voice.wind = this.loop(this.buffers.wind, out);
       voice.water = this.loop(this.buffers.water, out);
+      // brake squeal: slightly detuned high tones with tremolo
+      const o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+      o1.type = 'sine'; o2.type = 'triangle';
+      o1.frequency.value = 3150; o2.frequency.value = 4720;
+      const g = ctx.createGain(); g.gain.value = 0;
+      const trem = ctx.createOscillator(); trem.frequency.value = 9;
+      const tg = ctx.createGain(); tg.gain.value = 0.3;
+      const mix = ctx.createGain(); mix.gain.value = 0.7;
+      trem.connect(tg).connect(mix.gain);
+      o1.connect(mix); o2.connect(mix); mix.connect(g).connect(out);
+      o1.start(); o2.start(); trem.start();
+      voice.brake = { o1, o2, trem, g };
     }
     this.voices.set(vehicle, voice);
     return voice;
@@ -355,6 +367,7 @@ export class AudioEngine {
     try {
       for (const k of ['on', 'off', 'squeal', 'road', 'gravel', 'scrape', 'wind', 'water']) if (v[k]) v[k].src.stop();
       if (v.ev) { v.ev.o1.stop(); v.ev.o2.stop(); }
+      if (v.brake) { v.brake.o1.stop(); v.brake.o2.stop(); v.brake.trem.stop(); }
       if (v.turbo) v.turbo.o.stop();
       if (v.horn) this.horn(vehicle, false);
       if (v.siren) this.siren(vehicle, false);
@@ -407,6 +420,13 @@ export class AudioEngine {
     v.scrape.gain.gain.setTargetAtTime(Math.min(1, info.scrape) * 0.55, t, 0.02);
     if (v.wind) v.wind.gain.gain.setTargetAtTime(Math.min(1, (info.speed / 55) ** 2) * 0.3, t, 0.1);
     if (v.water) v.water.gain.gain.setTargetAtTime(info.water * 0.5, t, 0.1);
+    if (v.brake) {
+      // squeal when braking gently at low speed
+      const b = veh.controls.brake;
+      const sp = info.speed;
+      const q = b > 0.15 && b < 0.85 && sp > 0.8 && sp < 9 ? (1 - Math.abs(sp - 4) / 5) * 0.025 : 0;
+      v.brake.g.gain.setTargetAtTime(Math.max(0, q), t, 0.08);
+    }
   }
 
   oneShot(buffer, gain, rate = 1, pos = null) {

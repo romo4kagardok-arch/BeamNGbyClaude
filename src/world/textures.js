@@ -42,7 +42,8 @@ export function worldTextures() {
   const asphaltBase = (g, w, h, seed) => {
     noiseFill(g, w, h, [78, 79, 82], 34, seed);
     for (let i = 0; i < 260; i++) {
-      g.fillStyle = `rgba(${R() < 0.5 ? 40 : 120},${R() < 0.5 ? 40 : 120},${R() < 0.5 ? 42 : 122},${0.05 + R() * 0.08})`;
+      const v = R() < 0.5 ? 40 : 120;
+      g.fillStyle = `rgba(${v},${v},${v + 2},${0.05 + R() * 0.08})`;
       const r = 2 + R() * 14;
       g.beginPath();
       g.arc(R() * w, R() * h, r, 0, 7);
