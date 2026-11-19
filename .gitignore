@@ -1,2 +1,4 @@
 node_modules/
 *.log
+test/viewer.bundle.js
+test/mapview.bundle.js

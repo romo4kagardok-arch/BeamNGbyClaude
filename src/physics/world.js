@@ -202,6 +202,12 @@ export class PhysicsWorld {
   _contact(body, i, nx, ny, nz, pen, mu, ih, collider, surf) {
     const p = body.pos, prev = body.prev;
     const k = i * 3;
+    // limit correction per substep: deep initial penetration resolves over several substeps
+    // instead of converting into an explosive velocity
+    if (pen > 0.04) {
+      const dvn = (prev[k] - p[k]) * nx + (prev[k + 1] - p[k + 1]) * ny + (prev[k + 2] - p[k + 2]) * nz;
+      pen = Math.min(pen, 0.04 + Math.max(0, -dvn));
+    }
     let dx = p[k] - prev[k], dy = p[k + 1] - prev[k + 1], dz = p[k + 2] - prev[k + 2];
     const vn = -(dx * nx + dy * ny + dz * nz) * ih;
     p[k] += nx * pen; p[k + 1] += ny * pen; p[k + 2] += nz * pen;

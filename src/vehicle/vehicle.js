@@ -680,10 +680,24 @@ export class Vehicle {
     const loc = this._loc || (this._loc = new Float64Array(3));
     const zones = { front: [0, 0], rear: [0, 0], left: [0, 0], right: [0, 0], roof: [0, 0], engine: [0, 0] };
     let total = 0;
+    // reference: mean displacement of the (stiff) cabin nodes removes the shift of the best-fit frame
+    const disp = this._disp || (this._disp = new Float64Array(n * 3));
+    let mx = 0, my = 0, mz = 0, mc = 0;
     for (let i = 0; i < n; i++) {
       b.localNode(i, loc);
       const k = i * 3;
-      const d = Math.hypot(loc[0] - b.rest[k], loc[1] - b.rest[k + 1], loc[2] - b.rest[k + 2]);
+      disp[k] = loc[0] - b.rest[k]; disp[k + 1] = loc[1] - b.rest[k + 1]; disp[k + 2] = loc[2] - b.rest[k + 2];
+      if (b.tag[i] & ZONE.MID) { mx += disp[k]; my += disp[k + 1]; mz += disp[k + 2]; mc++; }
+    }
+    if (mc) { mx /= mc; my /= mc; mz /= mc; }
+    for (let i = 0; i < n; i++) {
+      const k = i * 3;
+      disp[k] -= mx; disp[k + 1] -= my; disp[k + 2] -= mz;
+    }
+    this.relDisp = disp;
+    for (let i = 0; i < n; i++) {
+      const k = i * 3;
+      const d = Math.hypot(disp[k], disp[k + 1], disp[k + 2]);
       const t = b.tag[i];
       total += d;
       if (t & ZONE.FRONT) { zones.front[0] += d; zones.front[1]++; }
@@ -721,15 +735,14 @@ export class Vehicle {
       if (w.detached) continue;
       let dx = 0, dy = 0, dz = 0, brokenCnt = 0;
       for (const [nd, wt] of w.mountW) {
-        b.localNode(nd, loc);
         const k = nd * 3;
-        dx += (loc[0] - b.rest[k]) * wt; dy += (loc[1] - b.rest[k + 1]) * wt; dz += (loc[2] - b.rest[k + 2]) * wt;
+        dx += disp[k] * wt; dy += disp[k + 1] * wt; dz += disp[k + 2] * wt;
       }
       for (const nd of w.mountNodes) brokenCnt += this.countBrokenAt(nd);
-      const disp = Math.hypot(dx, dy, dz);
+      const mountDisp = Math.hypot(dx, dy, dz);
       w.toe = clamp(-dx * w.side * 1.4 + dz * 0.2, -0.25, 0.25) * (w.front ? 1 : 0.6);
       w.camber = clamp(dx * w.side * 2, -0.4, 0.4);
-      if (disp > 0.27 || brokenCnt > 10) {
+      if (mountDisp > 0.27 || brokenCnt > 10) {
         w.detached = true;
         w.contact = false;
         this.events.push({ type: 'wheelOff', wheel: w });

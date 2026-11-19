@@ -142,7 +142,7 @@ export class BodyShape {
     const H = Math.max(ry - yt, 0);
     const k = clamp(H / 0.15, 0, 1);
     return [
-      [hb, yt],
+      [hb, yt - 0.012],
       [lerp(hb, hr + 0.05, 0.92), yt + H * 0.84],
       [lerp(hb, hr - 0.02, 0.98), yt + H * 0.975 + 0.0 * k],
       [hr * 0.55, ry + 0.012 * k],

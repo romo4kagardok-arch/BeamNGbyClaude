@@ -261,6 +261,16 @@ export class SoftBody {
     const pos = this.pos, prev = this.prev, vel = this.vel;
     const ih = 1 / h;
     for (let k = 0; k < this.n * 3; k++) vel[k] = (pos[k] - prev[k]) * ih;
+    // sanity limit (~430 km/h per node) guards against numerical blow-ups
+    const vmax = 120;
+    for (let i = 0; i < this.n; i++) {
+      const k = i * 3;
+      const s2 = vel[k] * vel[k] + vel[k + 1] * vel[k + 1] + vel[k + 2] * vel[k + 2];
+      if (s2 > vmax * vmax) {
+        const f = vmax / Math.sqrt(s2);
+        vel[k] *= f; vel[k + 1] *= f; vel[k + 2] *= f;
+      }
+    }
   }
 
   dampBeams(h) {
