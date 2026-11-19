@@ -530,7 +530,7 @@ class Game {
       this.camera.position.set(c[0] + Math.sin(a) * d, c[1] + 1.2 + L * 0.12, c[2] + Math.cos(a) * d);
       // look slightly left of the car so it sits right of the menu column
       const rx = Math.cos(a), rz = -Math.sin(a);
-      const off = this.menu.screen && this.menu.screen.classList.contains('garage-panel') ? -0.2 : L * 0.32 + 0.6;
+      const off = this.menu.screen && this.menu.screen.classList.contains('garage-panel') ? -0.2 : L * 0.1 + 0.3;
       this.camera.lookAt(c[0] - rx * off, c[1] + 0.1, c[2] - rz * off);
       if (this.camera.fov !== 50) { this.camera.fov = 50; this.camera.updateProjectionMatrix(); }
       this.env.update(new THREE.Vector3(c[0], c[1], c[2]));

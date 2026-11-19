@@ -307,7 +307,7 @@ export class Race extends Mode {
     const tr = g.map.track;
     this.laps = this.opts.laps || 3;
     const nOpp = this.opts.opponents ?? 3;
-    this.path = makePath(tr.pts, { closed: true, mu: 1.05, speedLimit: 75, brake: 7.5 });
+    this.path = makePath(tr.pts, { closed: true, mu: 0.9, speedLimit: 75, brake: 6.5 });
     const P = this.path;
     const sel = g.selectedVehicle();
     // grid behind start line

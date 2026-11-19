@@ -83,6 +83,23 @@ export class AIDriver {
     this.aggro = opts.aggro ?? 1;
     this.avoidT = 0;
     this.avoidSide = 1;
+    this.lastYaw = null;
+    this.yawRate = 0;
+    vehicle.cfg.tcs = true;
+    vehicle.cfg.abs = true;
+    this.offT = 0;
+    this.stuckCount = 0;
+  }
+
+  respawnOnPath() {
+    const P = this.path, v = this.v;
+    if (!P) return v.repair();
+    const i = this.idx >= 0 ? this.idx : 0;
+    const a = P.pts[i], b = P.pts[(i + 2) % P.n];
+    const game = this.game;
+    const y = game && game.groundAt ? game.groundAt(a[0], a[1]) : game && game.terrain ? game.terrain.heightAt(a[0], a[1]) : null;
+    v.resetTo(a[0], y ?? v.body.com[1] - v.body.restCom[1], a[1], Math.atan2(b[0] - a[0], b[1] - a[1]));
+    this.stuck = 0; this.offT = 0; this.reverseT = 0; this.stuckCount = 0;
   }
 
   steerTo(tx, tz) {
@@ -101,6 +118,14 @@ export class AIDriver {
 
   update(dt, game) {
     const v = this.v;
+    this.game = game;
+    // yaw rate estimate (for countersteer)
+    const yawNow = v.yaw;
+    if (this.lastYaw !== null && dt > 0) {
+      const r = wrapAngle(yawNow - this.lastYaw) / dt;
+      this.yawRate += (r - this.yawRate) * Math.min(1, dt * 12);
+    }
+    this.lastYaw = yawNow;
     if (!this.enabled || !v.body.enabled) { v.input.throttle = 0; v.input.brake = 0; v.input.steerDirect = 0; return; }
     const inp = v.input;
     const b = v.body, c = b.com;
@@ -156,7 +181,17 @@ export class AIDriver {
         px += (-ddz / l) * off; pz += (ddx / l) * off;
       }
       tx = px; tz = pz;
-      steer = this.steerTo(px, pz).steer;
+      const st = this.steerTo(px, pz);
+      steer = st.steer;
+      // yaw-rate feedback: countersteer when rotating faster than the path requires
+      const lookD = Math.max(4, Math.hypot(px - c[0], pz - c[2]));
+      const desired = (Math.abs(speed) * 2 * Math.sin(st.ang)) / lookD;
+      steer = clamp(steer - (this.yawRate - desired) * 0.35, -1, 1);
+      // off-track detection
+      const np = P.pts[this.idx];
+      const offD = Math.hypot(np[0] - c[0], np[1] - c[2]);
+      if (offD > 14) this.offT += dt; else this.offT = Math.max(0, this.offT - dt);
+      if (this.offT > 5 && this.allowRecover) { this.respawnOnPath(); return; }
       // plan speed: min over the next ~60 m
       let mins = Infinity;
       let k = this.idx, dacc = 0;
@@ -209,11 +244,19 @@ export class AIDriver {
       inp.handbrake = 0;
       return;
     }
-    if (targetSpeed > 2 && Math.abs(speed) < 0.8) this.stuck += dt; else this.stuck = Math.max(0, this.stuck - dt);
-    if (this.stuck > 2.2) { this.stuck = 0; this.reverseT = 1.6; v.gear = -1; return; }
+    if (targetSpeed > 2 && Math.abs(speed) < 0.8) this.stuck += dt; else { this.stuck = Math.max(0, this.stuck - dt); if (Math.abs(speed) > 6) this.stuckCount = 0; }
+    if (this.stuck > 2.2) {
+      this.stuck = 0;
+      this.stuckCount++;
+      if (this.stuckCount > 2 && this.path && this.allowRecover) { this.respawnOnPath(); return; }
+      this.reverseT = 1.6; v.gear = -1; return;
+    }
     if (v.gear < 0) v.gear = 1;
     const err = targetSpeed - speed;
     inp.throttle = clamp(err * 0.35 + (targetSpeed > 1 ? 0.15 : 0), 0, 1);
+    // throttle modulation by lateral load: don't floor it while the tyres are already at the limit
+    const latUse = Math.abs(this.yawRate * speed) / (0.95 * 9.81);
+    if (latUse > 0.55) inp.throttle = Math.min(inp.throttle, clamp((1 - latUse) * 2.2, 0.08, 1));
     inp.brake = err < -1.5 ? clamp(-err * 0.18, 0, 1) : targetSpeed < 0.5 && Math.abs(speed) < 2 ? 0.6 : 0;
     if (inp.brake > 0) inp.throttle = 0;
     inp.steerDirect = steer;

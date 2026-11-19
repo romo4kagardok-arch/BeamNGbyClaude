@@ -379,10 +379,17 @@ export class Vehicle {
     if (this.shiftTimer > 0 && !this.electric) throttle = 0;
     // traction control
     if (this.cfg.tcs) {
-      let maxSlip = 0;
-      for (const w of this.wheels) if (w.driven && w.contact) maxSlip = Math.max(maxSlip, w.slipLong);
-      this.tcsActive = maxSlip > 0.18 && throttle > 0.1;
-      if (this.tcsActive) throttle *= clamp(1 - (maxSlip - 0.18) * 4, 0.15, 1);
+      // traction + stability control: wheelspin and oversteer (rear sliding more than front) cut the throttle
+      let maxSlip = 0, fl = 0, rl = 0, nf = 0, nr = 0;
+      for (const w of this.wheels) {
+        if (!w.contact) continue;
+        if (w.driven) maxSlip = Math.max(maxSlip, w.slipLong);
+        if (w.front) { fl += w.slipLat; nf++; } else { rl += w.slipLat; nr++; }
+      }
+      const over = nf && nr && this.speed > 4 ? rl / nr - fl / nf : 0;
+      this.tcsActive = (maxSlip > 0.18 || over > 0.05) && throttle > 0.1;
+      if (maxSlip > 0.18) throttle *= clamp(1 - (maxSlip - 0.18) * 4, 0.15, 1);
+      if (over > 0.05) throttle *= clamp(1 - (over - 0.05) * 9, 0.05, 1);
     }
     const idleW = (e.idle || 0) * RPM2W;
     const redW = e.redline * RPM2W;
@@ -648,8 +655,9 @@ export class Vehicle {
         w.omega += (w.driveTorque / Ieff) * h;
         w.omega *= 1 - 0.3 * h;
       }
-      // brakes
+      // brakes (with electronic brake-force distribution: rear brake follows rear axle load)
       let Tb = c.brake * w.brakeMax;
+      if (!w.front && w.contact) Tb *= clamp(w.load / w.staticLoad, 0.35, 1.1);
       if (this.cfg.abs && c.brake > 0.2 && w.contact && Math.abs(w.vLong || 0) > 2.5) {
         const k = (w.omega * r - w.vLong) / Math.max(Math.abs(w.vLong), 1);
         if (k < -0.14) { Tb *= 0.15; this.absActive = true; }
