@@ -595,8 +595,9 @@ class Game {
       p.input.handbrake = d.handbrake;
       if (d.horn !== !!p.hornOn) { p.hornOn = d.horn; this.audio.horn(p, d.horn); }
     }
+    this.updateTrafficLOD(dt);
     for (const v of this.vehicles) {
-      if (v.ai && !v.frozen) v.ai.update(dt, this);
+      if (v.ai && !v.frozen && !v.kinematic) v.ai.update(dt, this);
       if (v.frozen) { v.input.throttle = 0; v.input.brake = 1; v.input.handbrake = 1; v.input.steerDirect = 0; }
       if (v.sirenOn && this.audio.ready && this.audio.voices.has(v) && !this.audio.voices.get(v).siren) this.audio.siren(v, true);
     }
@@ -610,6 +611,60 @@ class Game {
     this.audio.setListener(this.camera.position, f);
     this.env.update(p ? new THREE.Vector3(p.body.com[0], p.body.com[1], p.body.com[2]) : this.camera.position);
     this.hud.update(dt, this);
+  }
+
+  // Level of detail for AI traffic: far-away cars follow their path kinematically (no soft-body cost)
+  updateTrafficLOD(dt) {
+    const cam = this.camera.position;
+    const sdt = dt * this.world.timeScale * (this.world.paused ? 0 : 1);
+    for (const v of this.vehicles) {
+      const ai = v.ai;
+      if (!ai || ai.role !== 'traffic' || !ai.path || v === this.player) continue;
+      const c = v.body.com;
+      const d = Math.hypot(c[0] - cam.x, c[2] - cam.z);
+      if (!v.kinematic) {
+        if (d > 280 && v.damage.total < 0.05 && v.up[1] > 0.9 && ai.idx >= 0) {
+          v.kinematic = true;
+          v.body.enabled = false;
+          v.kinSpeed = Math.max(8, Math.min(ai.maxSpeed, v.fwdSpeed));
+          v.kinIdx = ai.idx;
+          v.kinFrac = 0;
+        }
+        continue;
+      }
+      if (d < 240) {
+        v.kinematic = false;
+        v.body.enabled = true;
+        const R = v.body.R;
+        v.body.setVelocity(R[2] * v.kinSpeed, 0, R[8] * v.kinSpeed);
+        for (const w of v.wheels) w.omega = v.kinSpeed / w.radius;
+        ai.idx = v.kinIdx;
+        continue;
+      }
+      // advance along the path
+      const P = ai.path;
+      let move = v.kinSpeed * sdt;
+      let i = v.kinIdx, f = v.kinFrac;
+      for (let guard = 0; guard < 50 && move > 0; guard++) {
+        const a = P.pts[i], b = P.pts[(i + 1) % P.n];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const left = (1 - f) * L;
+        if (move < left) { f += move / L; move = 0; } else { move -= left; f = 0; i = (i + 1) % P.n; }
+      }
+      v.kinIdx = i; v.kinFrac = f;
+      const a = P.pts[i], b = P.pts[(i + 1) % P.n];
+      const x = a[0] + (b[0] - a[0]) * f, z = a[1] + (b[1] - a[1]) * f;
+      const yaw = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      v.place(x, this.map.T.heightAt(x, z), z, yaw);
+      v.gear = 3;
+      for (const w of v.wheels) {
+        v.body.toWorld(w.rest[0], w.rest[1], w.rest[2], w.center);
+        w.spin += (v.kinSpeed / w.radius) * sdt;
+        w.steerAngle = 0;
+      }
+      v.fwdSpeed = v.speed = v.kinSpeed;
+      v.rpm = 2200;
+    }
   }
 
   postPhysics(dt) {

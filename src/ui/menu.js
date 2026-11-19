@@ -98,7 +98,7 @@ export class Menu {
     const body = h('div', { class: 'form' },
       h('h3', {}, 'Место появления'), this.spawnSelect('city'),
       h('div', { class: 'row' },
-        h('label', { class: 'field' }, 'Трафик (машин ИИ)', h('input', { type: 'range', min: 0, max: 10, value: this.game.settings.traffic, id: 'traffic', oninput: (e) => (e.target.nextSibling.textContent = e.target.value) }), h('span', {}, String(this.game.settings.traffic))),
+        h('label', { class: 'field' }, 'Трафик (машин ИИ)', h('input', { type: 'range', min: 0, max: 16, value: this.game.settings.traffic, id: 'traffic', oninput: (e) => (e.target.nextSibling.textContent = e.target.value) }), h('span', {}, String(this.game.settings.traffic))),
         this.timeSelect()),
       h('button', { class: 'btn primary big', onclick: () => {
         this.click();
@@ -186,7 +186,7 @@ export class Menu {
   // ---------------- garage ----------------
   openGarage(onDone) {
     const g = this.game;
-    g.enterMenu(true);
+    if (!onDone) g.enterMenu(true); // from the pause menu the running mode stays alive
     const sel = g.selectedVehicle();
     let id = sel.id;
     const render = () => {
