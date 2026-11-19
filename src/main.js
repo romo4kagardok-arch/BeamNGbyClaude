@@ -737,7 +737,7 @@ class Game {
           break;
         }
         case 'engineDead':
-          if (isP) this.hud.message('Двигатель уничтожен', 2, 'warn');
+          if (isP) this.hud.message(e.reason === 'water' ? 'Гидроудар: двигатель залит водой' : 'Двигатель уничтожен', 2, 'warn');
           break;
         case 'shift':
           if (isP) this.audio.shift();

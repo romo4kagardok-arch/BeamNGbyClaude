@@ -122,6 +122,7 @@ export class SoftBody {
     this.ignoreBodies = null; // Set of body ids not to collide with
     this.waterImmersion = 0;
     this.dragCoef = 0.0; // per-node linear air drag scaling
+    this.buoyancy = 1.25; // buoyant acceleration in g at full node immersion
     this.enabled = true;
     this.placeAt([0, 0, 0], [0, 0, 0, 1]);
   }
@@ -197,7 +198,7 @@ export class SoftBody {
         if (wl !== null && pos[k + 1] < wl) {
           const depth = Math.min(wl - pos[k + 1], 0.6);
           immersed++;
-          ay += 9.81 * 1.25 * (depth / 0.6) * 1.0; // buoyancy (cars float a moment then sink)
+          ay += 9.81 * this.buoyancy * (depth / 0.6); // buoyancy (vehicles flood and sink over time)
           const wd = 2.2;
           ax -= vel[k] * wd; ay -= vel[k + 1] * wd; az -= vel[k + 2] * wd;
         }

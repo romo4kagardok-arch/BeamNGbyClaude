@@ -220,6 +220,8 @@ export class Vehicle {
     this.engineDamage = 0;
     this.engineRunning = true;
     this.gear = 1;
+    this.flood = 0;
+    this.body.buoyancy = 1.25;
     this.damage = { total: 0, front: 0, rear: 0, left: 0, right: 0, roof: 0, engine: 0 };
     this.events.push({ type: 'repair' });
   }
@@ -238,6 +240,8 @@ export class Vehicle {
     this.engineAlive = true;
     this.engineDamage = 0;
     this.engineRunning = true;
+    this.flood = 0;
+    this.body.buoyancy = 1.25;
     this.damage = { total: 0, front: 0, rear: 0, left: 0, right: 0, roof: 0, engine: 0 };
     this.place(x, y, z, yaw);
     this.events.push({ type: 'repair' });
@@ -334,6 +338,16 @@ export class Vehicle {
         this._bov = true;
       }
       if (c.throttle > 0.5) this._bov = false;
+    }
+    // water: hydrolock and gradual flooding
+    const imm = this.body.waterImmersion;
+    if (imm > 0.02) {
+      this.flood = Math.min(1, (this.flood || 0) + dt * (0.02 + imm * 0.08));
+      this.body.buoyancy = 1.25 * (1 - this.flood * 0.75);
+      if (imm > 0.45 && this.engineAlive && !this.electric) {
+        this.engineAlive = false;
+        this.events.push({ type: 'engineDead', reason: 'water' });
+      }
     }
     // acceleration (for G meter)
     const ax = (v[0] - this._prevVel[0]) / Math.max(dt, 1e-3), ay = (v[1] - this._prevVel[1]) / Math.max(dt, 1e-3), az = (v[2] - this._prevVel[2]) / Math.max(dt, 1e-3);
