@@ -3,6 +3,7 @@ import { VEHICLES, VEHICLE_ORDER, ENGINES, TIRES, SUSPENSIONS, WHEEL_STYLES, PAI
 import { CRASH_SCENARIOS, fmtTime } from '../modes/modes.js';
 import { CONTROLS_HELP } from '../core/input.js';
 import { PROP_DEFS } from '../world/dynamics.js';
+import { storeGet } from '../core/storage.js';
 
 const h = (tag, attrs = {}, ...children) => {
   const e = document.createElement(tag);
@@ -78,7 +79,8 @@ export class Menu {
           h('div', { class: 'row-btns' },
             h('button', { class: 'btn', onclick: () => { this.click(); this.openSettings(); } }, 'Настройки'),
             h('button', { class: 'btn', onclick: () => { this.click(); this.openHelp(); } }, 'Управление')))),
-      h('div', { class: 'footer' }, 'Оригинальная игра. Все модели, звуки и текстуры генерируются процедурно.'));
+      h('div', { class: 'touch-note' }, 'Для управления нужна клавиатура или геймпад.'),
+      h('div', { class: 'footer' }, 'Оригинальная игра. Все модели, звуки и текстуры генерируются процедурно. Кликните по экрану игры, чтобы работала клавиатура.'));
     this.root.appendChild(main);
     this.screen = main;
   }
@@ -153,7 +155,7 @@ export class Menu {
     const sel = g.selectedVehicle();
     const body = h('div', { class: 'form' },
       h('div', { class: 'scen-grid' }, g.map.trials.map((t) => {
-        const best = parseFloat(localStorage.getItem('cz_best_' + t.id + '_' + sel.id) || 'Infinity');
+        const best = parseFloat(storeGet('cz_best_' + t.id + '_' + sel.id, 'Infinity'));
         return h('button', { class: 'scen-btn', onclick: () => { this.click(); g.startMode('trial', { trial: t.id }); } },
           h('b', {}, t.name), h('small', {}, `${t.gates.length} чекпоинтов · рекорд (${VEHICLES[sel.id].name}): ${fmtTime(best)}`));
       })));

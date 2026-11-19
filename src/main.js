@@ -21,6 +21,7 @@ import { MODES, FreeRoam } from './modes/modes.js';
 import { AIDriver, makePath, nearestIndex } from './ai/driver.js';
 import { Editor, expandObject } from './editor/editor.js';
 import { clamp } from './core/math.js';
+import { storeGet, storeSet, storeJSON } from './core/storage.js';
 
 const HARD = new Set([SURF.ASPHALT, SURF.CONCRETE, SURF.CURB, SURF.METAL, SURF.WOOD]);
 const LOOSE = new Set([SURF.GRASS, SURF.DIRT, SURF.SAND, SURF.SNOW, SURF.MUD]);
@@ -28,7 +29,8 @@ const LOOSE = new Set([SURF.GRASS, SURF.DIRT, SURF.SAND, SURF.SNOW, SURF.MUD]);
 const DEFAULT_SETTINGS = { quality: 'high', resScale: 1, volume: 0.8, fov: 62, showFps: false, autoSlowmo: true, kmh: true, timeOfDay: 13, traffic: 4 };
 
 function load(key, def) {
-  try { const v = JSON.parse(localStorage.getItem(key)); return v ? { ...def, ...v } : { ...def }; } catch (e) { return { ...def }; }
+  const v = storeJSON(key, null);
+  return v && typeof v === 'object' ? { ...def, ...v } : { ...def };
 }
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
@@ -39,7 +41,7 @@ class Game {
     this.garage = {};
     const saved = load('cz_garage', {});
     for (const id of Object.keys(VEHICLES)) this.garage[id] = { ...defaultConfig(id), ...(saved[id] || {}) };
-    this.selected = localStorage.getItem('cz_selected') || 'sedan';
+    this.selected = storeGet('cz_selected', 'sedan');
     if (!VEHICLES[this.selected]) this.selected = 'sedan';
     this.vehicles = [];
     this.player = null;
@@ -134,10 +136,10 @@ class Game {
   }
 
   // ---------------- settings ----------------
-  saveSettings() { localStorage.setItem('cz_settings', JSON.stringify(this.settings)); }
-  saveGarage() { localStorage.setItem('cz_garage', JSON.stringify(this.garage)); }
+  saveSettings() { storeSet('cz_settings', JSON.stringify(this.settings)); }
+  saveGarage() { storeSet('cz_garage', JSON.stringify(this.garage)); }
   resetGarage(id) { this.garage[id] = defaultConfig(id); this.saveGarage(); this.refreshShowcase(); }
-  selectVehicle(id) { this.selected = id; localStorage.setItem('cz_selected', id); this.refreshShowcase(); }
+  selectVehicle(id) { this.selected = id; storeSet('cz_selected', id); this.refreshShowcase(); }
   selectedVehicle() { return { id: this.selected, cfg: { ...this.garage[this.selected] } }; }
 
   applyQuality() {
@@ -826,8 +828,19 @@ class Game {
 }
 
 const game = new Game();
-game.init().catch((e) => {
-  console.error(e);
-  const el = document.getElementById('loading');
-  if (el) el.querySelector('.load-text').textContent = 'Ошибка: ' + e.message;
-});
+// When the page is republished while open (artifact viewer), return to the mode the player was in.
+const hot = typeof window !== 'undefined' && window.claude ? window.claude.hot : null;
+try {
+  if (hot && hot.snapshot) hot.snapshot(() => ({ modeId: game.modeId, modeOpts: game.modeOpts }));
+} catch (e) { /* optional */ }
+const boot = (data) => {
+  game.init().then(() => {
+    if (data && data.modeId && data.modeId !== 'editorTest' && MODES[data.modeId]) game.startMode(data.modeId, data.modeOpts || {});
+  }).catch((e) => {
+    console.error(e);
+    const el = document.getElementById('loading');
+    if (el) el.querySelector('.load-text').textContent = 'Ошибка: ' + e.message;
+  });
+};
+if (hot && hot.ready) hot.ready(boot);
+else boot((hot && hot.data) || {});

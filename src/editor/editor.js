@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { PROP_DEFS } from '../world/dynamics.js';
 import { teardropLoop } from '../core/math.js';
+import { storeJSON, storeSet } from '../core/storage.js';
 
 export const EDITOR_TYPES = {
   ramp: { name: 'Трамплин', params: { len: [12, 3, 40, 0.5], height: [2.5, 0.3, 10, 0.1], width: [6, 2, 16, 0.5] }, mat: 'wood' },
@@ -311,8 +312,9 @@ export class Editor {
         <div class="ed-row"><button class="btn small" data-a="save">Сохранить</button><button class="btn small" data-a="new">Новая</button></div>
         <select class="ed-list" size="5"></select>
         <div class="ed-row"><button class="btn small" data-a="load">Загрузить</button><button class="btn small" data-a="del">Удалить</button></div>
-        <div class="ed-row"><button class="btn small" data-a="export">Экспорт JSON</button><button class="btn small" data-a="import">Импорт</button></div>
-        <input type="file" class="ed-file" accept=".json" style="display:none">
+        <div class="ed-row"><button class="btn small" data-a="export">Копировать JSON</button><button class="btn small" data-a="import">Импорт файла</button></div>
+        <input type="file" class="ed-file" id="ed-file" accept=".json" hidden>
+        <textarea class="ed-json" id="ed-json" rows="4" readonly hidden></textarea>
       </div>
       <div class="ed-sec"><button class="btn primary" data-a="test">▶ Тест-драйв</button><button class="btn" data-a="exit">Выйти в меню</button></div>
       <div class="hint">ЛКМ по земле — поставить · ЛКМ по объекту — выбрать/тащить · R/F — поворот · PgUp/PgDn — высота · Del — удалить · Ctrl+D — копия · ПКМ+мышь — обзор · WASD, Q/E — полёт</div>`;
@@ -391,7 +393,8 @@ export class Editor {
   }
 
   scenes() {
-    try { return JSON.parse(localStorage.getItem('cz_scenes') || '{}'); } catch (e) { return {}; }
+    const v = storeJSON('cz_scenes', {});
+    return v && typeof v === 'object' ? v : {};
   }
 
   refreshList() {
@@ -426,9 +429,9 @@ export class Editor {
   save() {
     const all = this.scenes();
     all[this.sceneName] = this.serialize();
-    localStorage.setItem('cz_scenes', JSON.stringify(all));
+    const ok = storeSet('cz_scenes', JSON.stringify(all));
     this.refreshList();
-    this.game.hud.message('Сцена «' + this.sceneName + '» сохранена', 2);
+    this.game.hud.message(ok ? 'Сцена «' + this.sceneName + '» сохранена' : 'Браузер запретил сохранение — используйте «Экспорт JSON»', 2.5, ok ? '' : 'warn');
   }
 
   load(name) {
@@ -442,16 +445,30 @@ export class Editor {
     const all = this.scenes();
     if (!all[name]) return;
     delete all[name];
-    localStorage.setItem('cz_scenes', JSON.stringify(all));
+    storeSet('cz_scenes', JSON.stringify(all));
     this.refreshList();
   }
 
+  // Copies the scene JSON (downloads may be blocked when the game runs inside a sandboxed page)
   exportJSON() {
-    const blob = new Blob([JSON.stringify(this.serialize(), null, 1)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (this.sceneName || 'scene').replace(/[^\wа-яё -]/gi, '_') + '.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const text = JSON.stringify(this.serialize(), null, 1);
+    const box = this.panel.querySelector('.ed-json');
+    box.hidden = false;
+    box.value = text;
+    const done = () => this.game.hud.message('JSON сцены скопирован в буфер обмена', 2);
+    const fallback = () => { box.focus(); box.select(); this.game.hud.message('Выделено — нажмите Ctrl+C, чтобы скопировать', 3); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+    // a plain file download still works when the game is opened from disk
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      a.download = (this.sceneName || 'scene').replace(/[^\wа-яё -]/gi, '_') + '.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) { /* blocked in sandboxed frames */ }
   }
+
 }

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { AIDriver, makePath, nearestIndex } from '../ai/driver.js';
 import { VEHICLES } from '../vehicle/defs.js';
 import { clamp, wrapAngle } from '../core/math.js';
+import { storeGet, storeSet } from '../core/storage.js';
 
 export const fmtTime = (t) => {
   if (!isFinite(t)) return '--:--.--';
@@ -436,7 +437,7 @@ export class TimeTrial extends Mode {
     this.prev = [tr.start.x, tr.start.z];
     const key = 'cz_best_' + tr.id + '_' + g.selectedVehicle().id;
     this.key = key;
-    this.best = parseFloat(localStorage.getItem(key) || 'Infinity');
+    this.best = parseFloat(storeGet(key, 'Infinity'));
     this.countdown = 2.99;
     this.lastBeep = 3;
     g.player.frozen = true;
@@ -470,7 +471,7 @@ export class TimeTrial extends Mode {
           this.done = true;
           this.markers.setActive(-5);
           const rec = this.t < this.best;
-          if (rec) { this.best = this.t; localStorage.setItem(this.key, String(this.t)); }
+          if (rec) { this.best = this.t; storeSet(this.key, String(this.t)); }
           g.hud.message((rec ? 'НОВЫЙ РЕКОРД!<br>' : 'Финиш!<br>') + fmtTime(this.t), 4, 'big');
           setTimeout(() => g.menu.showResults('Испытание завершено', [['Трасса', tr.name], ['Автомобиль', v.def.name], ['Время', fmtTime(this.t)], ['Рекорд', fmtTime(this.best)], ['Повреждения', Math.round(v.damage.total * 100) + '%']], [['Ещё раз', () => g.restartMode()], ['Главное меню', () => g.menu.openMain()], ['Продолжить', () => g.menu.closeResults()]]), 2000);
         } else {
