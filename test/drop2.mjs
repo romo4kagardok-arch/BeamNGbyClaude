@@ -1,0 +1,10 @@
+import { makeWorld, spawn, run } from './harness.mjs';
+const id = process.argv[2] || 'truck', h = +(process.argv[3] || 10);
+const W = makeWorld();
+const v = spawn(W, id, 0, 0, 0);
+v.driverless = true;
+run(W, 0.5);
+for (let i = 0; i < v.body.n; i++) v.body.pos[i*3+1] += h;
+v.body.prev.set(v.body.pos);
+let i = 0;
+run(W, 4, (t) => { if (i++ % 6 === 0) console.log(t.toFixed(2), 'y', v.body.com[1].toFixed(2), 'vy', v.body.comVel[1].toFixed(2), 'comp', v.wheels.map(w=>w.comp.toFixed(2)).join(','), 'pl', v.body.plasticEnergy.toFixed(2), 'up', v.up.map(x=>x.toFixed(2)).join(',')); });
