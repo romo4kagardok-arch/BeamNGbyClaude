@@ -201,6 +201,30 @@ export class AudioEngine {
     this.buffers = {};
   }
 
+  // Synthesise all raw sample data (CPU heavy, can run during loading before any user gesture)
+  prepare() {
+    if (this.raw) return;
+    const R = {};
+    R.engine = {};
+    for (const [k, p] of Object.entries(ENGINE_PROFILES)) R.engine[k] = { on: engineBuffer(p, true, 11 + k.length), off: engineBuffer(p, false, 29 + k.length) };
+    R.road = noiseBuffer(3, 'brown', 3);
+    R.wind = noiseBuffer(3, 'pink', 4);
+    R.squeal = noiseBuffer(2, 'squeal', 5);
+    R.gravel = noiseBuffer(2.5, 'gravel', 6);
+    R.scrape = noiseBuffer(2, 'scrape', 7);
+    R.water = noiseBuffer(2, 'water', 8);
+    R.impactL = [impactBuffer(false, 1), impactBuffer(false, 2), impactBuffer(false, 3)];
+    R.impactH = [impactBuffer(true, 4), impactBuffer(true, 5), impactBuffer(true, 6)];
+    R.glass = [glassBuffer(1), glassBuffer(2)];
+    R.clunk = clickBuffer(140, 0.12, 9);
+    R.thud = clickBuffer(55, 0.3, 10);
+    R.blip = clickBuffer(880, 0.15, 11);
+    R.blipHi = clickBuffer(1320, 0.4, 12);
+    R.bov = (() => { const d = noiseBuffer(0.5, 'pink', 13); for (let i = 0; i < d.length; i++) d[i] *= Math.exp(-i / (SR * 0.12)); return biquadBP(d, 2500, 1); })();
+    this.raw = R;
+  }
+
+  // Creates the AudioContext (must follow a user gesture) and wraps the prepared data in buffers
   init() {
     if (this.ctx) {
       if (this.ctx.state === 'suspended') this.ctx.resume();
@@ -208,6 +232,7 @@ export class AudioEngine {
     }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
+    this.prepare();
     this.ctx = new AC({ sampleRate: SR });
     const ctx = this.ctx;
     this.master = ctx.createGain();
@@ -221,23 +246,11 @@ export class AudioEngine {
       b.copyToChannel(data, 0);
       return b;
     };
-    const B = this.buffers;
+    const R = this.raw, B = this.buffers;
     B.engine = {};
-    for (const [k, p] of Object.entries(ENGINE_PROFILES)) B.engine[k] = { on: mk(engineBuffer(p, true, 11 + k.length)), off: mk(engineBuffer(p, false, 29 + k.length)) };
-    B.road = mk(noiseBuffer(3, 'brown', 3));
-    B.wind = mk(noiseBuffer(3, 'pink', 4));
-    B.squeal = mk(noiseBuffer(2, 'squeal', 5));
-    B.gravel = mk(noiseBuffer(2.5, 'gravel', 6));
-    B.scrape = mk(noiseBuffer(2, 'scrape', 7));
-    B.water = mk(noiseBuffer(2, 'water', 8));
-    B.impactL = [mk(impactBuffer(false, 1)), mk(impactBuffer(false, 2)), mk(impactBuffer(false, 3))];
-    B.impactH = [mk(impactBuffer(true, 4)), mk(impactBuffer(true, 5)), mk(impactBuffer(true, 6))];
-    B.glass = [mk(glassBuffer(1)), mk(glassBuffer(2))];
-    B.clunk = mk(clickBuffer(140, 0.12, 9));
-    B.thud = mk(clickBuffer(55, 0.3, 10));
-    B.blip = mk(clickBuffer(880, 0.15, 11));
-    B.blipHi = mk(clickBuffer(1320, 0.4, 12));
-    B.bov = (() => { const d = noiseBuffer(0.5, 'pink', 13); for (let i = 0; i < d.length; i++) d[i] *= Math.exp(-i / (SR * 0.12)); return mk(biquadBP(d, 2500, 1)); })();
+    for (const [k, e] of Object.entries(R.engine)) B.engine[k] = { on: mk(e.on), off: mk(e.off) };
+    for (const k of ['road', 'wind', 'squeal', 'gravel', 'scrape', 'water', 'clunk', 'thud', 'blip', 'blipHi', 'bov']) B[k] = mk(R[k]);
+    for (const k of ['impactL', 'impactH', 'glass']) B[k] = R[k].map(mk);
     this.ready = true;
   }
 

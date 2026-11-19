@@ -1,6 +1,7 @@
 // Scene editor: place ramps, blocks, walls, poles, loops and props, save scenes, test-drive them.
 import * as THREE from 'three';
 import { PROP_DEFS } from '../world/dynamics.js';
+import { teardropLoop } from '../core/math.js';
 
 export const EDITOR_TYPES = {
   ramp: { name: 'Трамплин', params: { len: [12, 3, 40, 0.5], height: [2.5, 0.3, 10, 0.1], width: [6, 2, 16, 0.5] }, mat: 'wood' },
@@ -83,14 +84,15 @@ export function expandObject(o, terrain) {
       break;
     }
     case 'loop': {
-      const n = 40, R = p.radius, w = p.width;
+      const w = p.width;
       const rx = Math.cos(o.yaw), rz = -Math.sin(o.yaw);
-      for (let k = 0; k < n; k++) {
-        const a = ((k + 0.5) / n) * Math.PI * 2;
-        const seg = 2 * R * Math.sin(Math.PI / n) + 0.25;
-        const shift = (a / (Math.PI * 2)) * (w + 1.5) - (w + 1.5) / 2;
-        const along = Math.sin(a) * (R + 0.3), up = R - Math.cos(a) * (R + 0.3);
-        S({ kind: mat, loop: true, x: o.x + fx * along + rx * shift, z: o.z + fz * along + rz * shift, y: g + up, hx: w / 2, hy: 0.3, hz: seg / 2, yaw: o.yaw, pitch: -a });
+      const segs = teardropLoop(p.radius * 1.8, p.radius * 0.65, 64);
+      const startAlong = -segs[segs.length - 1].along / 2;
+      for (const sg of segs) {
+        const f = sg.theta / (Math.PI * 2);
+        const shift = f * (w + 1.5) - (w + 1.5) / 2;
+        const along = startAlong + sg.along + Math.sin(sg.theta) * 0.3;
+        S({ kind: mat, loop: true, x: o.x + fx * along + rx * shift, z: o.z + fz * along + rz * shift, y: g + sg.up - Math.cos(sg.theta) * 0.3, hx: w / 2, hy: 0.3, hz: sg.len / 2 + 0.18, yaw: o.yaw, pitch: -sg.theta });
       }
       break;
     }

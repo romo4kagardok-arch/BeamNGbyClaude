@@ -2,7 +2,7 @@
 // mountains with a serpentine pass, off-road park, lake, airfield and forests.
 import { Terrain } from '../physics/terrain.js';
 import { SURF } from '../physics/statics.js';
-import { makeNoise2D, fbm, ridged, smoothstep, clamp, lerp, rng, sampleSpline } from '../core/math.js';
+import { makeNoise2D, fbm, ridged, smoothstep, clamp, lerp, rng, sampleSpline, teardropLoop } from '../core/math.js';
 
 export const MAP_SIZE = 2048;
 const RES = 513;
@@ -346,22 +346,17 @@ export function generateMap(seed = 7) {
   ramp(-240, -110, Math.PI, 8, 2.2, 5);
   // landing ramp for the big jump
   S({ kind: 'metal', ramp: true, x: -270, z: -150, y: PH + 1.5, hx: 3.5, hy: 0.3, hz: 12, yaw: Math.PI, pitch: 0.24 });
-  // side-tilt rollover ramp
-  S({ kind: 'wood', ramp: true, x: -230, z: -190, y: PH + 0.5, hx: 1.6, hy: 0.25, hz: 6, yaw: Math.PI, roll: 0.42 });
-  // vertical loop
+  // one-sided rollover ramp: narrow ramp under the left wheels only
+  ramp(-230, -182, Math.PI, 9, 1.7, 1.5);
+  // vertical loop (teardrop profile, corkscrew offset so the exit clears the entry)
   {
-    const cx = -360, cz = -260, R0 = 11, w = 7;
-    const n = 40;
-    for (let k = 0; k < n; k++) {
-      const a0 = (k / n) * Math.PI * 2;
-      const a1 = ((k + 1) / n) * Math.PI * 2;
-      const am = (a0 + a1) / 2;
-      const segLen = 2 * R0 * Math.sin(Math.PI / n) + 0.25;
-      const shift = (am / (Math.PI * 2)) * (w + 1.5) - (w + 1.5) / 2;
-      // loop in z-y plane, car enters heading -z at bottom
-      const y = PH + R0 - Math.cos(am) * (R0 + 0.3);
-      const z = cz - Math.sin(am) * (R0 + 0.3);
-      S({ kind: 'metal', loop: true, x: cx + shift, z, y, hx: w / 2, hy: 0.3, hz: segLen / 2, yaw: 0, pitch: am });
+    const cx = -360, cz = -232, w = 7;
+    const segs = teardropLoop(19, 7, 64);
+    for (const sg of segs) {
+      const f = sg.theta / (Math.PI * 2);
+      const shift = f * (w + 1.5) - (w + 1.5) / 2;
+      const th = 0.3;
+      S({ kind: 'metal', loop: true, x: cx + shift, z: cz - sg.along - Math.sin(sg.theta) * th, y: PH + sg.up - Math.cos(sg.theta) * th, hx: w / 2, hy: th, hz: sg.len / 2 + 0.18, yaw: 0, pitch: sg.theta });
     }
   }
   // jersey barriers lining the proving ground

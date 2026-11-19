@@ -135,9 +135,9 @@ export const CRASH_SCENARIOS = {
   offset: { name: 'Смещённый удар (40%) — 64 км/ч', x: -406.9, z: -110, yaw: Math.PI, speed: 64, focus: [-406, -290], offsetCar: true },
   headon: { name: 'Лобовое: две машины по 60 км/ч', x: -350, z: -80, yaw: Math.PI, speed: 60, other: { x: -350, z: -270, yaw: 0, speed: 60 }, focus: [-350, -175] },
   tbone: { name: 'Удар в бок — 60 км/ч', x: -320, z: -80, yaw: Math.PI, speed: 60, parked: { x: -320, z: -200, yaw: Math.PI / 2 }, focus: [-320, -200] },
-  rollover: { name: 'Опрокидывание на трамплине — 75 км/ч', x: -229.2, z: -110, yaw: Math.PI, speed: 75, focus: [-230, -190] },
+  rollover: { name: 'Опрокидывание на трамплине — 75 км/ч', x: -229.25, z: -110, yaw: Math.PI, speed: 75, focus: [-230, -190], noStop: true },
   jump: { name: 'Прыжок с большой рампы — 105 км/ч', x: -270, z: -62, yaw: Math.PI, speed: 105, focus: [-270, -130], noStop: true },
-  loop: { name: 'Мёртвая петля — 92 км/ч', x: -364.25, z: -180, yaw: Math.PI, speed: 92, focus: [-360, -260], noStop: true },
+  loop: { name: 'Мёртвая петля — 100 км/ч', x: -364.25, z: -150, yaw: Math.PI, speed: 100, focus: [-360, -245], noStop: true },
   drop: { name: 'Падение с 25 м', x: -380, z: -160, yaw: Math.PI, speed: 0, drop: 25, focus: [-380, -160] },
   pileup: { name: 'Таран колонны — 90 км/ч', x: -440, z: -60, yaw: Math.PI, speed: 90, row: { x: -440, z0: -170, n: 3 }, focus: [-440, -190] },
 };
@@ -200,6 +200,13 @@ export class CrashTest extends Mode {
   }
   holdLane(v, speed, x, z, yaw) {
     const c = v.body.com;
+    if (v.up[1] < 0.9) {
+      // in a loop / airborne: full throttle, wheels straight
+      v.input.throttle = 1;
+      v.input.brake = 0;
+      v.input.steerDirect = 0;
+      return;
+    }
     // project ahead on the lane line
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
     const along = (c[0] - x) * fx + (c[2] - z) * fz;
@@ -228,7 +235,9 @@ export class CrashTest extends Mode {
         const d = Math.hypot(v.body.com[0] - sc.focus[0], v.body.com[2] - sc.focus[1]);
         if (d < 14 + kmh * 0.05 && !sc.noStop) g.world.timeScale = 0.25;
       }
-      if (v.body.impact.speed > 3 || (this.phase === 'drop' && v.body.impact.speed > 1)) {
+      const impThr = sc.noStop ? 9 : 3;
+      if (this.phase === 'launch' && this.time > 14) v.body.impact.speed = Math.max(v.body.impact.speed, impThr + 0.1);
+      if (v.body.impact.speed > impThr || (this.phase === 'drop' && v.body.impact.speed > 1)) {
         this.phase = 'impact';
         this.impactT = this.time;
         this.impactSpeed = this.phase === 'drop' ? v.speed * 3.6 : Math.max(kmh, this.lastKmh || 0);

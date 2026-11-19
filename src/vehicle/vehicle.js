@@ -480,7 +480,7 @@ export class Vehicle {
       // ground probe with 3 rays approximating the tyre circle
       const r = w.radius;
       const maxT = w.sMax + r;
-      let bestS = w.sMax, hit = false, nx = 0, ny = 1, nz = 0, surf = 0;
+      let bestS = w.sMax, hit = false, nx = 0, ny = 1, nz = 0, surf = 0, hitCol = null;
       for (let ri = 0; ri < 3; ri++) {
         const off = (ri - 1) * 0.62 * r;
         const ox = mx + hx * off, oy = my + hy * off, oz = mz + hz * off;
@@ -515,6 +515,7 @@ export class Vehicle {
             if (fromStatic) {
               nx = hitInfo.nx; ny = hitInfo.ny; nz = hitInfo.nz;
               surf = hitInfo.collider.surface;
+              hitCol = hitInfo.collider;
             } else {
               const px = ox - upx * t, pz = oz - upz * t;
               terrain.sample(px, pz, tmp4);
@@ -532,6 +533,7 @@ export class Vehicle {
       w.comp = w.sMax - w.s;
       w.nx = nx; w.ny = ny; w.nz = nz;
       w.surface = surf;
+      w.hitCol = hit ? hitCol : null;
       w.center[0] = mx - upx * w.s; w.center[1] = my - upy * w.s; w.center[2] = mz - upz * w.s;
     }
     // ---- anti-roll bars ----
@@ -569,7 +571,7 @@ export class Vehicle {
         if (w.bottomed) {
           // suspension fully bottomed: inelastic hard stop through the chassis (no stored energy)
           const vn = w.vx * upx + w.vy * upy + w.vz * upz;
-          if (vn < 0) Fs += Math.min((-vn * w.cornerMass * 0.6) / h, w.cornerMass * 9.81 * 45);
+          if (vn < 0) Fs += Math.min((-vn * w.cornerMass) / h, w.cornerMass * 9.81 * 90);
         }
         if (Fs < 0) Fs = 0;
         const nx = w.nx, ny = w.ny, nz = w.nz;
@@ -622,6 +624,18 @@ export class Vehicle {
         fx = hx * Fx + lx * Fy;
         fy = hy * Fx + ly * Fy;
         fz = hz * Fx + lz * Fy;
+        // loop guide: banked corkscrew loops steer the car along the plate centreline
+        const hc = w.hitCol;
+        if (hc && hc.userData && hc.userData.loop) {
+          const ax = hc.ax;
+          const sideDot = lfx * ax[0] + lfy * ax[1] + lfz * ax[2];
+          const off = (w.center[0] - hc.x) * ax[0] + (w.center[1] - hc.y) * ax[1] + (w.center[2] - hc.z) * ax[2] - w.side * this.shape.track * 0.5 * sideDot;
+          const vl = w.vx * ax[0] + w.vy * ax[1] + w.vz * ax[2];
+          let G = -(off * 9 + vl * 5) * w.cornerMass;
+          const gl = w.cornerMass * 14;
+          if (G > gl) G = gl; else if (G < -gl) G = -gl;
+          fx += ax[0] * G; fy += ax[1] * G; fz += ax[2] * G;
+        }
         w.contactPoint[0] = w.center[0] - nx * r; w.contactPoint[1] = w.center[1] - ny * r; w.contactPoint[2] = w.center[2] - nz * r;
         // wheel spin
         w.omega += ((w.driveTorque - Fx * r) / Ieff) * h;

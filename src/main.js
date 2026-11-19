@@ -101,7 +101,10 @@ class Game {
     this.hud.showFps = this.settings.showFps;
     this.menu = new Menu(document.getElementById('ui'), this);
     this.editor = new Editor(this);
-    this.setLoading('Объекты полигона…', 0.85);
+    this.setLoading('Синтез звуков двигателей…', 0.8);
+    await nextFrame();
+    this.audio.prepare();
+    this.setLoading('Объекты полигона…', 0.9);
     await nextFrame();
     this.spawnMapProps();
     this.applyQuality();
@@ -364,6 +367,7 @@ class Game {
 
   // ---------------- editor ----------------
   openEditor() {
+    this.menu.clear();
     this.endMode();
     this.state = 'editor';
     this.modeId = null;
@@ -394,7 +398,7 @@ class Game {
       const ex = expandObject(o, this.map.T);
       for (const s of ex.structures) {
         if (s.kind === 'pole') L.ids.push(this.statics.addCylinder({ x: s.x, z: s.z, y0: s.y0, y1: s.y1, r: s.r, surface: SURF.METAL }));
-        else L.ids.push(this.statics.addBox({ x: s.x, y: s.y, z: s.z, hx: s.hx, hy: s.hy, hz: s.hz, yaw: s.yaw || 0, pitch: s.pitch || 0, roll: s.roll || 0, surface: s.kind === 'wood' ? SURF.WOOD : s.kind === 'dirt' ? SURF.DIRT : s.kind === 'metal' ? SURF.METAL : SURF.CONCRETE, friction: s.kind === 'tirewall' ? 0.9 : 0.6 }));
+        else L.ids.push(this.statics.addBox({ x: s.x, y: s.y, z: s.z, hx: s.hx, hy: s.hy, hz: s.hz, yaw: s.yaw || 0, pitch: s.pitch || 0, roll: s.roll || 0, surface: s.kind === 'wood' ? SURF.WOOD : s.kind === 'dirt' ? SURF.DIRT : s.kind === 'metal' ? SURF.METAL : SURF.CONCRETE, friction: s.kind === 'tirewall' ? 0.9 : 0.6, userData: s }));
         const m = new THREE.Mesh(this.worldVisual.structureGeometry(s), mats[s.kind] || mats.concrete);
         m.castShadow = m.receiveShadow = true;
         L.group.add(m);
@@ -441,7 +445,8 @@ class Game {
   sandboxSpawnVehicle(id, aiMode) {
     if (!this.player) return;
     const s = this.spawnPointAhead(14);
-    const v = this.spawnVehicle(id, { color: ['#c9c9cc', '#7a1f1f', '#2c3e50', '#f2c400', '#1f7a3a'][Math.floor(Math.random() * 5)] }, s.x, s.z, s.yaw + (aiMode === 'parked' ? Math.PI / 2 : Math.PI), {});
+    const color = VEHICLES[id].police ? VEHICLES[id].color : ['#c9c9cc', '#7a1f1f', '#2c3e50', '#f2c400', '#1f7a3a'][Math.floor(Math.random() * 5)];
+    const v = this.spawnVehicle(id, { color }, s.x, s.z, s.yaw + (aiMode === 'parked' ? Math.PI / 2 : Math.PI), {});
     v.sandbox = true;
     if (aiMode === 'parked') v.driverless = true;
     else if (aiMode === 'drive') {
@@ -516,7 +521,7 @@ class Game {
       this.camera.position.set(c[0] + Math.sin(a) * d, c[1] + 1.2 + L * 0.12, c[2] + Math.cos(a) * d);
       // look slightly left of the car so it sits right of the menu column
       const rx = Math.cos(a), rz = -Math.sin(a);
-      const off = L * 0.32 + 0.6;
+      const off = this.menu.screen && this.menu.screen.classList.contains('garage-panel') ? -0.2 : L * 0.32 + 0.6;
       this.camera.lookAt(c[0] - rx * off, c[1] + 0.1, c[2] - rz * off);
       if (this.camera.fov !== 50) { this.camera.fov = 50; this.camera.updateProjectionMatrix(); }
       this.env.update(new THREE.Vector3(c[0], c[1], c[2]));

@@ -175,3 +175,27 @@ export function polylineLength(pts, closed = false) {
   if (closed) L += Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]);
   return L;
 }
+
+// Teardrop (clothoid-like) vertical loop: radius varies from rBottom at entry/exit to rTop at the apex.
+// Returns segments [{along, up, theta, len}] of the riding surface; car travels along +along.
+export function teardropLoop(rBottom, rTop, n = 64) {
+  const out = [];
+  const R = (t) => rTop + (rBottom - rTop) * Math.cos(t / 2) ** 2;
+  const sub = 8;
+  let along = 0, up = 0;
+  const dT = (Math.PI * 2) / n;
+  for (let k = 0; k < n; k++) {
+    const t0 = k * dT;
+    const a0 = along, u0 = up;
+    let len = 0;
+    for (let s = 0; s < sub; s++) {
+      const t = t0 + (s + 0.5) * (dT / sub);
+      const ds = R(t) * (dT / sub);
+      along += Math.cos(t) * ds;
+      up += Math.sin(t) * ds;
+      len += ds;
+    }
+    out.push({ along: (a0 + along) / 2, up: (u0 + up) / 2, theta: t0 + dT / 2, len });
+  }
+  return out;
+}
