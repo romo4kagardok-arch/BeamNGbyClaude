@@ -37,8 +37,9 @@ export class Hud {
     this.fpsEl = el('div', 'hud-fps hidden', this.root);
     this.buttons = el('div', 'hud-buttons', this.root);
     this.onButton = null;
-    for (const [id, label, title] of [['repair', '🔧 Ремонт', 'R — починить и поставить на колёса'], ['reset', '↺ На старт', 'T — вернуть на старт'], ['camera', '🎥 Камера', 'C — сменить камеру'], ['pause', '☰ Меню', 'Esc — пауза']]) {
-      const b = el('button', 'hud-btn', this.buttons, label);
+    for (const [id, icon, label, title] of [['repair', '🔧', 'Ремонт', 'R — починить и поставить на колёса'], ['reset', '↺', 'На старт', 'T — вернуть на старт'], ['camera', '🎥', 'Камера', 'C — сменить камеру'], ['pause', '☰', 'Меню', 'Esc — пауза']]) {
+      const b = el('button', 'hud-btn', this.buttons, `<span class="ico">${icon}</span><span class="lbl"> ${label}</span>`);
+      b.setAttribute('aria-label', label);
       b.title = title;
       b.addEventListener('click', (e) => { e.stopPropagation(); if (this.onButton) this.onButton(id); b.blur(); });
     }

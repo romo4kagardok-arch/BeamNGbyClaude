@@ -37,6 +37,8 @@ export class Input {
     this.padPrev = [];
     this.padActions = new Set();
     this.padUsed = false;
+    this.touch = null; // TouchControls, when present
+    this.touchActions = new Set();
     const typing = (e) => e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
     window.addEventListener('keydown', (e) => {
       if (typing(e)) return;
@@ -70,7 +72,7 @@ export class Input {
   pressed(action) {
     const codes = ACTIONS[action];
     if (codes && codes.some((c) => this.edges.has(c))) return true;
-    return this.padActions.has(action);
+    return this.padActions.has(action) || this.touchActions.has(action);
   }
   key(code) { return this.down.has(code); }
   keyPressed(code) { return this.edges.has(code); }
@@ -113,7 +115,17 @@ export class Input {
       if (lt > 0.02) brk = Math.max(brk, lt);
       if (b[0] && b[0].pressed) hb = 1;
     }
-    return { throttle: thr, brake: brk, steer, handbrake: hb, steerDirect, horn: hornHeld || !!(this.pad && this.pad.buttons[2] && this.pad.buttons[2].pressed) };
+    let touchHorn = false;
+    const T = this.touch;
+    if (T && T.mode === 'drive') {
+      const st = T.state;
+      thr = Math.max(thr, st.gas);
+      brk = Math.max(brk, st.brake);
+      hb = Math.max(hb, st.hb);
+      if (st.steer !== 0) steer = st.steer;
+      touchHorn = !!st.horn;
+    }
+    return { throttle: thr, brake: brk, steer, handbrake: hb, steerDirect, horn: hornHeld || touchHorn || !!(this.pad && this.pad.buttons[2] && this.pad.buttons[2].pressed) };
   }
 
   padLook() {
@@ -125,6 +137,7 @@ export class Input {
 
   endFrame() {
     this.edges.clear();
+    this.touchActions.clear();
     this.mouse.dx = 0;
     this.mouse.dy = 0;
     this.mouse.wheel = 0;

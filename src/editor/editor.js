@@ -117,8 +117,11 @@ export class Editor {
     this.sceneName = 'Моя сцена';
     this.active = false;
     this.history = [];
-    this.onMouseDown = this.onMouseDown.bind(this);
-    this.onMouseUp = this.onMouseUp.bind(this);
+    this.dragPos = null;
+    this.touchTap = null;
+    this.onPointerDown = this.onPointerDown.bind(this);
+    this.onPointerMove = this.onPointerMove.bind(this);
+    this.onPointerUp = this.onPointerUp.bind(this);
   }
 
   open() {
@@ -135,9 +138,14 @@ export class Editor {
       g.cam.free.pitch = -0.55;
       this._camPlaced = true;
     }
-    g.renderer.domElement.addEventListener('mousedown', this.onMouseDown);
-    window.addEventListener('mouseup', this.onMouseUp);
-    g.hud.message('Редактор сцен<br><small>ЛКМ — поставить/выбрать · ПКМ+мышь — обзор · WASD/QE — полёт · Shift — быстро</small>', 4);
+    const cv = g.renderer.domElement;
+    cv.addEventListener('pointerdown', this.onPointerDown);
+    cv.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerUp);
+    g.hud.message(g.touchMode
+      ? 'Редактор сцен<br><small>Тап — поставить/выбрать · тяни выбранный объект — двигать · свайп — обзор · джойстик и ▲▼ — полёт</small>'
+      : 'Редактор сцен<br><small>ЛКМ — поставить/выбрать · ПКМ+мышь — обзор · WASD/QE — полёт · Shift — быстро</small>', 4);
   }
 
   close() {
@@ -146,8 +154,13 @@ export class Editor {
     g.scene.remove(this.group);
     if (this.panel) { this.panel.remove(); this.panel = null; }
     if (this.helper) { g.scene.remove(this.helper); this.helper = null; }
-    g.renderer.domElement.removeEventListener('mousedown', this.onMouseDown);
-    window.removeEventListener('mouseup', this.onMouseUp);
+    const cv = g.renderer.domElement;
+    cv.removeEventListener('pointerdown', this.onPointerDown);
+    cv.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerUp);
+    this.dragging = false;
+    this.touchTap = null;
   }
 
   // ---------- object management ----------
@@ -249,13 +262,15 @@ export class Editor {
     return { obj, point: pt, objDist: hits.length ? hits[0].distance : Infinity, groundDist: pt ? t : Infinity };
   }
 
-  onMouseDown(e) {
-    if (!this.active || e.button !== 0) return;
-    const hit = this.pickGround(e.clientX, e.clientY);
+  // click / tap: select an object (and start dragging it) or place the current tool
+  clickAt(x, y, allowDrag) {
+    const hit = this.pickGround(x, y);
     if (hit.obj && hit.objDist <= hit.groundDist + 1) {
       this.select(hit.obj);
-      this.dragging = true;
-      this.dragOffset = hit.point ? [hit.obj.x - hit.point.x, hit.obj.z - hit.point.z] : [0, 0];
+      if (allowDrag) {
+        this.dragging = true;
+        this.dragOffset = hit.point ? [hit.obj.x - hit.point.x, hit.obj.z - hit.point.z] : [0, 0];
+      }
       return;
     }
     if (!hit.point) return;
@@ -264,15 +279,54 @@ export class Editor {
     this.add(this.tool, hit.point.x, hit.point.z, Math.round(yaw / (Math.PI / 12)) * (Math.PI / 12));
   }
 
-  onMouseUp() {
-    this.dragging = false;
+  onPointerDown(e) {
+    if (!this.active) return;
+    if (e.pointerType !== 'touch') {
+      if (e.button !== 0) return;
+      this.dragPos = null;
+      this.clickAt(e.clientX, e.clientY, true);
+      return;
+    }
+    if (this.touchTap) return; // second finger: ignore
+    this.touchTap = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false };
+    // dragging starts only on the already selected object; anything else is a tap or a look swipe
+    const hit = this.pickGround(e.clientX, e.clientY);
+    if (this.selected && hit.obj === this.selected && hit.objDist <= hit.groundDist + 1) {
+      this.dragging = true;
+      this.dragOffset = hit.point ? [hit.obj.x - hit.point.x, hit.obj.z - hit.point.z] : [0, 0];
+      this.dragPos = [e.clientX, e.clientY];
+      this.touchTap.drag = true;
+    }
+  }
+
+  onPointerMove(e) {
+    const t = this.touchTap;
+    if (!t || e.pointerId !== t.id) return;
+    if (t.drag) { this.dragPos = [e.clientX, e.clientY]; return; }
+    if (Math.hypot(e.clientX - t.x, e.clientY - t.y) > 10) t.moved = true;
+    if (t.moved) {
+      const inp = this.game.input;
+      const prev = inp.touchLook || [0, 0];
+      inp.touchLook = [prev[0] + (e.clientX - t.lx), prev[1] + (e.clientY - t.ly)];
+    }
+    t.lx = e.clientX; t.ly = e.clientY;
+  }
+
+  onPointerUp(e) {
+    const t = this.touchTap;
+    if (e.pointerType !== 'touch') { this.dragging = false; return; }
+    if (!t || e.pointerId !== t.id) return;
+    this.touchTap = null;
+    if (t.drag) { this.dragging = false; this.dragPos = null; return; }
+    if (!t.moved && this.active) this.clickAt(t.x, t.y, false);
   }
 
   update(dt, input) {
     if (!this.active) return;
     const o = this.selected;
     if (this.dragging && o) {
-      const hit = this.pickGround(input.mouse.x, input.mouse.y);
+      const dp = this.dragPos || [input.mouse.x, input.mouse.y];
+      const hit = this.pickGround(dp[0], dp[1]);
       if (hit.point) {
         o.x = hit.point.x + this.dragOffset[0];
         o.z = hit.point.z + this.dragOffset[1];
@@ -304,7 +358,7 @@ export class Editor {
     const p = document.createElement('div');
     p.className = 'editor-panel';
     p.innerHTML = `
-      <h3>Редактор сцен</h3>
+      <h3 class="panel-title">Редактор сцен <button class="btn small fold" data-a="fold" title="Свернуть панель">▾</button></h3>
       <div class="ed-sec"><b>Инструмент</b><div class="ed-tools"></div></div>
       <div class="ed-sec ed-props"></div>
       <div class="ed-sec"><b>Сцена</b>
@@ -334,6 +388,7 @@ export class Editor {
       const a = e.target.dataset && e.target.dataset.a;
       if (!a) return;
       this.game.audio.init();
+      if (a === 'fold') { p.classList.toggle('collapsed'); e.target.textContent = p.classList.contains('collapsed') ? '▸' : '▾'; return; }
       if (a === 'save') this.save();
       if (a === 'new') { for (const o of [...this.objects]) this.remove(o); }
       if (a === 'load') this.load(p.querySelector('.ed-list').value);

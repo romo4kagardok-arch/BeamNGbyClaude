@@ -22,6 +22,7 @@ import { AIDriver, makePath, nearestIndex } from './ai/driver.js';
 import { Editor, expandObject } from './editor/editor.js';
 import { clamp } from './core/math.js';
 import { storeGet, storeSet, storeJSON } from './core/storage.js';
+import { TouchControls, attachTouchCamera, isTouchDevice } from './ui/touch.js';
 
 const HARD = new Set([SURF.ASPHALT, SURF.CONCRETE, SURF.CURB, SURF.METAL, SURF.WOOD]);
 const LOOSE = new Set([SURF.GRASS, SURF.DIRT, SURF.SAND, SURF.SNOW, SURF.MUD]);
@@ -37,7 +38,10 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => setTimeou
 
 class Game {
   constructor() {
+    this.touchMode = isTouchDevice();
+    const firstRun = storeGet('cz_settings') === null;
     this.settings = load('cz_settings', DEFAULT_SETTINGS);
+    if (firstRun && this.touchMode) Object.assign(this.settings, { quality: 'medium', resScale: 0.75, traffic: 2, fov: 66 });
     this.garage = {};
     const saved = load('cz_garage', {});
     for (const id of Object.keys(VEHICLES)) this.garage[id] = { ...defaultConfig(id), ...(saved[id] || {}) };
@@ -102,6 +106,14 @@ class Game {
     this.hud = new Hud(document.getElementById('ui'), this.mapImage, MAP_SIZE);
     this.hud.showFps = this.settings.showFps;
     this.menu = new Menu(document.getElementById('ui'), this);
+    this.touch = new TouchControls(document.getElementById('ui'), this.input);
+    this.touchCam = { dragging: false };
+    attachTouchCamera(this.renderer.domElement, this.input, () => this.state === 'play' && !this.paused && this.cam.mode !== 'free');
+    if (this.touchMode) document.body.classList.add('touch-mode');
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch' && !this.touchMode) { this.touchMode = true; document.body.classList.add('touch-mode'); }
+      this.audio.init();
+    }, true);
     this.hud.onButton = (id) => {
       this.audio.init();
       if (this.state !== 'play') return;
@@ -131,6 +143,7 @@ class Game {
     if (this.loadingEl) this.loadingEl.classList.add('done');
     this.last = performance.now();
     this.renderer.setAnimationLoop((t) => this.frame(t));
+    this.renderer.domElement.style.touchAction = 'none';
     window.__game = this;
     window.__ready = true;
   }
@@ -338,6 +351,7 @@ class Game {
     this.modeName = this.mode.name;
     this.hud.show(true);
     this.audio.init();
+    if (this.touchMode && window.innerHeight > window.innerWidth) setTimeout(() => this.hud.message('Удобнее играть, повернув телефон горизонтально', 3), 3200);
   }
 
   restartMode() {
@@ -498,8 +512,12 @@ class Game {
   simulate(seconds, keys = []) {
     for (const k of keys) this.input.down.add(k);
     const n = Math.round(seconds * 60);
+    if (this.state === 'editor') {
+      for (let i = 0; i < n; i++) { this.updateTouchMode(); this.updateEditor(1 / 60); this.input.endFrame(); }
+    }
     for (let i = 0; i < n; i++) {
       this.input.pollPad();
+      this.updateTouchMode();
       if (this.state === 'play') this.updatePlay(1 / 60);
       else if (this.state === 'menu') this.updateMenu(1 / 60);
       this.input.endFrame();
@@ -514,11 +532,22 @@ class Game {
     const dt = Math.min(0.05, Math.max(0.0005, (t - this.last) / 1000));
     this.last = t;
     this.input.pollPad();
+    this.updateTouchMode();
     if (this.state === 'play') this.updatePlay(dt);
     else if (this.state === 'menu') this.updateMenu(dt);
     else if (this.state === 'editor') this.updateEditor(dt);
     this.renderer.render(this.scene, this.camera);
     this.input.endFrame();
+  }
+
+  updateTouchMode() {
+    if (!this.touch) return;
+    let mode = 'none';
+    if (this.touchMode) {
+      if (this.state === 'editor') mode = 'fly';
+      else if (this.state === 'play' && !this.paused && !this.menu.modal && !this.menu.screen) mode = this.cam.mode === 'free' ? 'fly' : 'drive';
+    }
+    this.touch.setMode(mode);
   }
 
   updateMenu(dt) {
@@ -609,7 +638,7 @@ class Game {
     this.world.step(dt);
     this.postPhysics(dt);
     if (freeCam) this.cam.updateFree(dt, this.input);
-    else this.cam.update(dt, p, this.input, this.canvasMouse && !this.menu.modal);
+    else this.cam.update(dt, p, this.input, (this.canvasMouse || (this.touchMode && this.input.mouse.left)) && !this.menu.modal);
     const f = new THREE.Vector3();
     this.camera.getWorldDirection(f);
     this.audio.setListener(this.camera.position, f);
@@ -804,7 +833,10 @@ class Game {
       this.audio.impact(im.speed, [im.x, im.y, im.z], im.surface !== SURF.WOOD && im.surface !== SURF.GRASS && im.surface !== SURF.DIRT);
       if (im.speed > 5 && metal) pf.sparks(im.x, im.y, im.z, b.comVel[0] * 0.5, 1, b.comVel[2] * 0.5, Math.min(40, im.speed * 2));
       if (im.speed > 10) pf.debrisBits(im.x, im.y, im.z, b.comVel[0], 1, b.comVel[2], Math.min(30, im.speed));
-      if (v === this.player) this.cam.addShake(Math.min(1, im.speed / 18));
+      if (v === this.player) {
+        this.cam.addShake(Math.min(1, im.speed / 18));
+        if (this.touchMode && im.speed > 6) this.touch.buzz(Math.min(160, Math.round(im.speed * 6)));
+      }
       if (LOOSE.has(im.surface)) for (let k = 0; k < 6; k++) pf.dust(im.x, im.y, im.z, b.comVel[0], b.comVel[2], 1, DUST_COLORS[2]);
     }
     // engine smoke / fire

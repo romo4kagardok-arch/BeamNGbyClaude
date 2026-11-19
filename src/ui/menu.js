@@ -78,8 +78,9 @@ export class Menu {
             h('button', { class: 'btn primary', onclick: () => { this.click(); this.openGarage(); } }, 'Гараж и тюнинг')),
           h('div', { class: 'row-btns' },
             h('button', { class: 'btn', onclick: () => { this.click(); this.openSettings(); } }, 'Настройки'),
-            h('button', { class: 'btn', onclick: () => { this.click(); this.openHelp(); } }, 'Управление')))),
-      h('div', { class: 'touch-note' }, 'Для управления нужна клавиатура или геймпад.'),
+            h('button', { class: 'btn', onclick: () => { this.click(); this.openHelp(); } }, 'Управление'),
+            canFullscreen() ? h('button', { class: 'btn', onclick: () => { this.click(); toggleFullscreen(); } }, 'На весь экран') : null))),
+      h('div', { class: 'touch-note' }, 'Сенсорное управление: руль — слева, газ и тормоз — справа. Удобнее держать телефон горизонтально.'),
       h('div', { class: 'footer' }, 'Оригинальная игра. Все модели, звуки и текстуры генерируются процедурно. Кликните по экрану игры, чтобы работала клавиатура.'));
     this.root.appendChild(main);
     this.screen = main;
@@ -243,7 +244,10 @@ export class Menu {
   }
 
   openHelp(onBack) {
-    const body = h('div', { class: 'help-grid' }, CONTROLS_HELP.map(([k, t]) => h('div', { class: 'help-row' }, h('kbd', {}, k), h('span', {}, t))));
+    const rows = (list) => h('div', { class: 'help-grid' }, list.map(([k, t]) => h('div', { class: 'help-row' }, h('kbd', {}, k), h('span', {}, t))));
+    const body = h('div', { class: 'form' },
+      h('h3', {}, 'Сенсорный экран'), rows(TOUCH_HELP),
+      h('h3', {}, 'Клавиатура и геймпад'), rows(CONTROLS_HELP));
     this.panel('Управление', body, { onBack: onBack || (() => this.openMain()) });
   }
 
@@ -334,8 +338,9 @@ export class Menu {
     const ai = h('select', { id: 'sb-ai' }, [['parked', 'Стоит'], ['drive', 'Едет по кольцевой'], ['chase', 'Преследует меня'], ['ram', 'Таранит (на полной)']].map(([v, t]) => h('option', { value: v }, t)));
     const props = h('div', { class: 'sb-props' }, Object.entries(PROP_DEFS).map(([k, d]) => h('button', { class: 'btn small', onclick: () => g.sandboxSpawnProp(k) }, d.name)));
     const slider = (label, min, max, step, val, fn) => h('label', { class: 'field' }, label, h('input', { type: 'range', min, max, step, value: val, oninput: (e) => fn(+e.target.value) }));
-    const p = h('div', { class: 'sandbox-panel' },
-      h('h3', {}, 'Песочница'),
+    const fold = h('button', { class: 'btn small fold', title: 'Свернуть панель', onclick: () => { p.classList.toggle('collapsed'); fold.textContent = p.classList.contains('collapsed') ? '▸' : '▾'; } }, '▾');
+    const p = h('div', { class: 'sandbox-panel' + (g.touchMode ? ' collapsed' : '') },
+      h('h3', { class: 'panel-title' }, 'Песочница ', fold),
       h('div', { class: 'sb-sec' }, h('b', {}, 'Техника'), sel, ai, h('button', { class: 'btn small primary', onclick: () => g.sandboxSpawnVehicle(sel.value, ai.value) }, 'Создать перед собой')),
       h('div', { class: 'sb-sec' }, h('b', {}, 'Объекты'), props),
       h('div', { class: 'sb-sec' }, h('b', {}, 'Физика'),
@@ -349,6 +354,7 @@ export class Menu {
         h('button', { class: 'btn small', onclick: () => { g.world.paused = !g.world.paused; } }, 'Пауза физики')),
       h('div', { class: 'hint' }, 'Tab — пересесть в другую машину'));
     document.body.appendChild(p);
+    if (g.touchMode) fold.textContent = '▸';
     this.sandboxPanel = p;
   }
 }
@@ -361,4 +367,27 @@ function statLine(sel) {
   const tq = Math.round(e.torque.reduce((m, p) => Math.max(m, p[1]), 0));
   const drive = { FWD: 'передний', RWD: 'задний', AWD: 'полный' }[sel.cfg.drive || def.drive];
   return `${hp} л.с. · ${tq} Н·м · ${def.mass} кг · ${(hp / (def.mass / 1000)).toFixed(0)} л.с./т · привод ${drive}`;
+}
+
+const TOUCH_HELP = [
+  ['Левая половина экрана', 'Руль: проведите пальцем влево/вправо'],
+  ['ГАЗ / ТОРМОЗ', 'Педали справа внизу; тормоз на месте включает задний ход'],
+  ['P', 'Ручник'],
+  ['📯 💡 ⏱ 🚪', 'Сигнал, фары, замедление времени, двери'],
+  ['🔧 ↺ 🎥 ☰', 'Ремонт, на старт, камера, меню (вверху слева)'],
+  ['Свайп по сцене', 'Повернуть камеру; щипок — приблизить/отдалить'],
+  ['Редактор', 'Тап — поставить/выбрать, тянуть выбранный объект — двигать, джойстик — полёт'],
+];
+
+function canFullscreen() {
+  try { return !!(document.fullscreenEnabled && document.documentElement.requestFullscreen); } catch (e) { return false; }
+}
+
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+    document.documentElement.requestFullscreen().then(() => {
+      try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* unsupported */ }
+    }).catch(() => {});
+  } catch (e) { /* not allowed here */ }
 }

@@ -204,6 +204,18 @@ export class CameraRig {
       if (Math.abs(ax[1]) > 0.1) m.addScaledVector(dir, -ax[1]);
       if (Math.abs(ax[0]) > 0.1) m.addScaledVector(right, ax[0]);
     }
+    const T = input.touch;
+    if (T && T.mode === 'fly') {
+      const [fx, fy] = T.state.fly;
+      m.addScaledVector(dir, -fy);
+      m.addScaledVector(right, fx);
+      m.y += T.state.upDown;
+      if (input.touchLook) {
+        f.yaw -= input.touchLook[0] * 0.006;
+        f.pitch = clamp(f.pitch - input.touchLook[1] * 0.006, -1.5, 1.5);
+        input.touchLook = null;
+      }
+    }
     f.pos.addScaledVector(m, sp * dt);
     const g = this.terrain.heightAt(f.pos.x, f.pos.z) + 0.8;
     if (f.pos.y < g) f.pos.y = g;

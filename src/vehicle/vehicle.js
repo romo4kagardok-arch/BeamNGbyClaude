@@ -274,7 +274,7 @@ export class Vehicle {
     let thr = inp.throttle, brk = inp.brake;
     if (this.auto) {
       if (this.gear >= 0) {
-        if (inp.brake > 0.1 && inp.throttle < 0.1 && this.fwdSpeed < 0.6) {
+        if (inp.brake > 0.1 && inp.throttle < 0.1 && this.fwdSpeed < 0.6 && !this.frozen) {
           this.reverseHold += dt;
           if (this.reverseHold > 0.2) {
             this.gear = -1;
