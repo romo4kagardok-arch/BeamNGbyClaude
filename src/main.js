@@ -206,6 +206,7 @@ class Game {
       m.rotation.y = t.rot;
       m.castShadow = true;
       grp.add(m);
+      grp.userData.sharedGeometry = true;
       this.dynamics.spawnFallen('tree', t.x, t.y, t.z, t.s, grp, push);
       this.audio.thud(0.8, [t.x, t.y + 1, t.z]);
     } else if (ud.lamp !== undefined) {
@@ -233,6 +234,7 @@ class Game {
     // static preview mesh for the editor (same as dynamic prop visual)
     const it = this.dynamics.spawnProp(type, 0, -500, 0, 0);
     const obj = it.obj;
+    obj.userData.sharedGeometry = true; // keep geometry alive for the editor preview
     this.dynamics.remove(it);
     obj.matrixAutoUpdate = true;
     obj.matrix.identity();

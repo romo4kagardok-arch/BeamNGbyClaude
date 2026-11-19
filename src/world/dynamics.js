@@ -268,6 +268,7 @@ export class Dynamics {
     if (i >= 0) this.items.splice(i, 1);
     this.world.removeBody(it.body);
     this.scene.remove(it.obj);
+    if (!it.obj.userData.sharedGeometry) it.obj.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
   }
 
   clear(kinds = null) {
