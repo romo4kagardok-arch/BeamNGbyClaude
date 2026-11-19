@@ -1,0 +1,17 @@
+{
+  "name": "crumple-zone",
+  "version": "0.1.0",
+  "description": "Browser soft-body driving simulator (Three.js + custom XPBD node-beam physics)",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --format=iife --target=es2020 --minify --sourcemap --outfile=dist/game.js",
+    "dev": "esbuild src/main.js --bundle --format=iife --target=es2020 --sourcemap --outfile=dist/game.js --watch",
+    "serve": "python3 -m http.server 8080",
+    "test": "node test/physics.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.0",
+    "three": "0.170.0"
+  },
+  "type": "module"
+}
